@@ -1,127 +1,147 @@
-# AChE-Insect-Transcriptome
-### **A Multi-Species Pipeline for Analyzing Acetylcholinesterase Gene Evolution**
+# AChE Gene Evolution – Insect Transcriptome Pipeline
+### A Multi-Species Workflow for Acetylcholinesterase (AChE) Gene Analysis
 
-This repository contains a complete workflow for downloading, processing, and analyzing acetylcholinesterase (AChE) transcripts across **locusts, crickets, and mosquitoes**. The pipeline identifies the **longest isoform per AChE gene**, builds a combined multi-species dataset, prepares sequence alignments, constructs phylogenetic trees, and produces final visualizations for research and poster presentation.
-
----
-
-## 🧬 **Project Overview**
-
-Locusts possess unusually high AChE gene copy numbers yet **fail to evolve organophosphate pesticide resistance**, unlike fast-resistance species such as mosquitoes. This project investigates:
-
-- **AChE copy-number differences** across insects  
-- Whether locust AChE expansion is **ancestral** (shared with crickets) or **derived**  
-- How gene family size may constrain resistance evolution  
-- Whether any AChE copies carry **known resistance-associated mutations**  
-
-This repository contains the code and structure enabling all computational steps.
+This repository contains a complete R-based bioinformatics pipeline for collecting, filtering, aligning, and analyzing acetylcholinesterase (AChE) transcripts across **locusts**, **crickets**, and **mosquitoes**. The workflow identifies the longest isoforms, builds multi-species FASTA files, prepares alignments, constructs phylogenetic trees, and generates figures for research poster or manuscript preparation.
 
 ---
 
-## 🗂 **Repository Structure**
+## 🧬 Project Overview
 
-AChE_Project/
-│ AChE_Project.Rproj
-│ README.md
-│ .gitignore
-│
-├── scripts/
-│ 01_download_AChE_sequences.R
-│ 02_extract_longest_isoforms.R
-│ 03_merge_longest_fastas.R
-│ 04_run_alignment.R
-│ 05_build_tree_fasttree.R
-│ 06_plot_tree.R
-│
-└── data/
-├── raw/ # raw NCBI downloads (ignored by Git)
-├── longest/ # longest isoforms per gene (ignored by Git)
-├── combined/ # merged multi-species FASTA (ignored by Git)
-├── alignment/ # alignment outputs (ignored by Git)
-└── tree/ # final tree files (committed)
+Locusts possess unusually high AChE gene copy numbers yet **fail to evolve organophosphate pesticide resistance**, unlike mosquitoes. This project explores:
 
-The repo is structured for **reproducibility**, **clarity**, and **collaborator usability**.
+- AChE copy-number differences across key insects  
+- Whether locust AChE expansion is ancestral or derived  
+- How gene family size affects resistance evolution  
+- Whether AChE copies contain known resistance-associated mutations  
+
+This repository provides the complete computational workflow for that analysis.
 
 ---
 
-## ⚙️ **Pipeline Summary**
+## ⚙️ Pipeline Summary
 
-### **1. Download AChE Sequences**  
-`scripts/01_download_AChE_sequences.R`  
-- Pulls all AChE CDS/mRNA sequences for each species from NCBI  
-- Outputs to `data/raw/`  
+### **1. Download AChE sequences**  
+**File:** `scripts/01_download_AChE_sequences.R`  
+Downloads all AChE CDS/mRNA isoforms from NCBI into `data/raw/`.
 
-### **2. Extract Longest Isoforms**  
-`scripts/02_extract_longest_isoforms.R`  
-- Groups isoforms by gene name  
-- Keeps the longest CDS per gene  
-- Outputs to `data/longest/`  
+### **2. Extract longest isoforms**  
+**File:** `scripts/02_extract_longest_isoforms.R`  
+Identifies the longest CDS per AChE gene and writes results to `data/longest/`.
 
-### **3. Merge Multi-Species FASTA**  
-`scripts/03_merge_longest_fastas.R`  
-- Combines longest isoforms across species  
-- Produces the dataset used for all downstream analyses  
+### **3. Merge longest isoforms**  
+**File:** `scripts/03_merge_longest_fastas.R`  
+Builds a unified multi-species FASTA in `data/combined/`.
 
-### **4. Prepare Alignment**  
-`scripts/04_run_alignment.R`  
-- Runs or prepares input for MAFFT or Clustal Omega  
-- Saves alignments to `data/alignment/`  
+### **4. Prepare alignment**  
+**File:** `scripts/04_run_alignment.R`  
+Prepares or runs MAFFT/Clustal alignment and saves files to `data/alignment/`.
 
-### **5. Build Phylogenetic Tree**  
-`scripts/05_build_tree_fasttree.R`  
-- Runs FastTree/IQ-TREE on the alignment  
-- Saves output to `data/tree/`  
+### **5. Build phylogenetic tree**  
+**File:** `scripts/05_build_tree_fasttree.R`  
+Constructs a phylogenetic tree using FastTree or IQ-TREE, saved to `data/tree/`.
 
-### **6. Plot Tree**  
-`scripts/06_plot_tree.R`  
-- Reads the final tree and generates publishable figures  
+### **6. Plot phylogeny**  
+**File:** `scripts/06_plot_tree.R`  
+Generates polished tree visualizations.
 
 ---
 
-## 🧪 **Species Panel**
+## 🗂 Repository Structure (Non-breaking format)
 
-### **Locusts (Schistocerca spp.)**
-- *S. gregaria*  
-- *S. americana*  
-- *S. piceifrons*
+**Top-level files**
+- `AChE_Project.Rproj` — RStudio project file  
+- `README.md` — documentation  
+- `LICENSE` — MIT license  
+- `CITATION.cff` — citation metadata  
+- `.gitignore` — ignored files  
 
-### **Cricket**
+**Folder: `scripts/`**
+- 01_download_AChE_sequences.R  
+- 02_extract_longest_isoforms.R  
+- 03_merge_longest_fastas.R  
+- 04_run_alignment.R  
+- 05_build_tree_fasttree.R  
+- 06_plot_tree.R  
+
+**Folder: `data/`**
+- `raw/` — raw NCBI downloads *(ignored by Git)*  
+- `longest/` — longest isoform FASTAs *(ignored by Git)*  
+- `combined/` — merged multi-species dataset *(ignored by Git)*  
+- `alignment/` — alignment files *(ignored by Git)*  
+- `tree/` — final tree outputs *(tracked)*  
+
+---
+
+## 🦗 Species Included
+
+**Locusts (Schistocerca spp.)**  
+- *Schistocerca gregaria*  
+- *Schistocerca americana*  
+- *Schistocerca piceifrons*
+
+**Cricket**  
 - *Anabrus simplex* (Mormon cricket)
 
-### **Mosquitoes**
+**Mosquitoes**  
 - *Anopheles gambiae*  
 - *Aedes aegypti*  
 - *Culex quinquefasciatus*
 
 ---
 
-## 📦 **Dependencies**
+## 📦 Dependencies
 
-- **R ≥ 4.0**
-- Packages:  
-  `rentrez`, `seqinr`, `dplyr`, `stringr`, `ape`, `ggtree`, `ggplot2`, `readr`
+R packages:
+- rentrez  
+- seqinr  
+- dplyr  
+- stringr  
+- ape  
+- ggtree  
+- ggplot2  
+- readr  
 
-External tools (optional depending on workflow):
-- **MAFFT** (multiple sequence alignment)
-- **FastTree** or **IQ-TREE** (phylogenetics)
-
----
-
-## 🧑‍💻 **Usage**
-
-1. Clone the repository  
-2. Open `AChE_Project.Rproj` in RStudio  
-3. Run scripts **in numerical order (01 → 06)**  
-4. Add new species or update raw data simply by adding FASTA files and re-running  
+External tools:
+- **MAFFT** — alignment  
+- **FastTree / IQ-TREE** — phylogenetics  
 
 ---
 
-## 👩‍🔬 **Author**
+## 🚀 Quickstart
+
+**1. Clone the repository**
+git clone https://github.com/Taylortxtt/AChE_Insect_Transcriptome.git
+
+**2. Open the project**
+- Open `AChE_Project.Rproj` in RStudio
+
+**3. Run the pipeline**
+Run scripts **in numerical order**:
+
+1 → 2 → 3 → 4 → 5 → 6
+
+Each script outputs files into the corresponding `data/` subfolder.
+
+**4. Add new species**
+- Drop FASTA files into `data/raw/`  
+- Re-run the pipeline starting at script 02 or 03
+
+---
+
+## 👩‍🔬 Author
 
 **Taylor M. Johnson**  
 Department of Biochemistry  
 Mississippi State University  
 
-This repository is actively updated as part of an undergraduate research project supervised by Hunter Walt and Dr. Federico Hoffmann.
+---
+
+## 📄 License
+
+MIT License — see the `LICENSE` file.
+
+## 📣 Citation
+
+Please cite using the included `CITATION.cff` file.
 
 ---

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this pipeline in your research, please cite it using the metadata below."
+title: "AChE-Insect-Transcriptome: A Multi-Species Pipeline for Acetylcholinesterase Gene Evolution Analysis"
+authors:
+  - family-names: Johnson
+    given-names: Taylor M.
+affiliation: "Department of Biochemistry, Mississippi State University"
+date-released: "2025-11-17"
+version: "1.0.0"
+repository-code: "https://github.com/yourusername/AChE_Insect_Transcriptome"
+keywords:
+  - acetylcholinesterase
+  - AChE
+  - transcriptome
+  - phylogenetics
+  - MAFFT
+  - FastTree
+  - genomics
+  - evolutionary biology
