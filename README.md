@@ -46,7 +46,7 @@ Generates polished tree visualizations.
 
 ---
 
-## 🗂 Repository Structure (Non-breaking format)
+## 🗂 Repository Structure
 
 **Top-level files**
 - `AChE_Project.Rproj` — RStudio project file  
