@@ -1,147 +1,335 @@
-# AChE Gene Evolution – Insect Transcriptome Pipeline
-### A Multi-Species Workflow for Acetylcholinesterase (AChE) Gene Analysis
+# 📘 AChE Insect Transcriptome  
+### Pipeline for Identifying Longest AChE Transcripts Across Insect Species
 
-This repository contains a complete R-based bioinformatics pipeline for collecting, filtering, aligning, and analyzing acetylcholinesterase (AChE) transcripts across **locusts**, **crickets**, and **mosquitoes**. The workflow identifies the longest isoforms, builds multi-species FASTA files, prepares alignments, constructs phylogenetic trees, and generates figures for research poster or manuscript preparation.
+[![R](https://img.shields.io/badge/R-≥4.0-blue)](https://www.r-project.org/)
+![Status](https://img.shields.io/badge/status-active-success)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
----
+This repository contains a complete, reproducible pipeline for retrieving, processing, aligning, and analyzing **acetylcholinesterase (AChE)** transcripts across multiple insect species.
 
-## 🧬 Project Overview
+The workflow supports *locusts*, *crickets*, and *mosquitoes* and includes:
 
-Locusts possess unusually high AChE gene copy numbers yet **fail to evolve organophosphate pesticide resistance**, unlike mosquitoes. This project explores:
+- Automated NCBI sequence download  
+- Extraction of the **longest transcript per gene**  
+- Multi-species FASTA construction  
+- MAFFT alignment  
+- Phylogenetic reconstruction with  
+  - **FastTree** (fast, approximate ML)  
+  - **IQ-TREE** (slower, model-tested ML)  
+- Tree visualization (FastTree & IQ-TREE)  
+- **Mutation screening**  
+- AChE copy-number summaries  
+- A clean config system (no PATH hacking required)
 
-- AChE copy-number differences across key insects  
-- Whether locust AChE expansion is ancestral or derived  
-- How gene family size affects resistance evolution  
-- Whether AChE copies contain known resistance-associated mutations  
-
-This repository provides the complete computational workflow for that analysis.
-
----
-
-## ⚙️ Pipeline Summary
-
-### **1. Download AChE sequences**  
-**File:** `scripts/01_download_AChE_sequences.R`  
-Downloads all AChE CDS/mRNA isoforms from NCBI into `data/raw/`.
-
-### **2. Extract longest isoforms**  
-**File:** `scripts/02_extract_longest_isoforms.R`  
-Identifies the longest CDS per AChE gene and writes results to `data/longest/`.
-
-### **3. Merge longest isoforms**  
-**File:** `scripts/03_merge_longest_fastas.R`  
-Builds a unified multi-species FASTA in `data/combined/`.
-
-### **4. Prepare alignment**  
-**File:** `scripts/04_run_alignment.R`  
-Prepares or runs MAFFT/Clustal alignment and saves files to `data/alignment/`.
-
-### **5. Build phylogenetic tree**  
-**File:** `scripts/05_build_tree_fasttree.R`  
-Constructs a phylogenetic tree using FastTree or IQ-TREE, saved to `data/tree/`.
-
-### **6. Plot phylogeny**  
-**File:** `scripts/06_plot_tree.R`  
-Generates polished tree visualizations.
+The goal is to evaluate AChE gene expansion patterns and detect functional or insecticide-resistance–associated variants, while keeping the pipeline simple, readable, and easy for collaborators to run.
 
 ---
 
-## 🗂 Repository Structure
+## ⚡ Quickstart
 
-**Top-level files**
-- `AChE_Project.Rproj` — RStudio project file  
-- `README.md` — documentation  
-- `LICENSE` — MIT license  
-- `CITATION.cff` — citation metadata  
-- `.gitignore` — ignored files  
+1. **Clone or download** this repository  
+   ```bash
+   git clone https://github.com/<your-username>/AChE_Insect_Transcriptome.git
+   cd AChE_Insect_Transcriptome
+   ```
 
-**Folder: `scripts/`**
-- 01_download_AChE_sequences.R  
-- 02_extract_longest_isoforms.R  
-- 03_merge_longest_fastas.R  
-- 04_run_alignment.R  
-- 05_build_tree_fasttree.R  
-- 06_plot_tree.R  
+2. **Install external tools** (MAFFT, FastTree, IQ-TREE)
 
-**Folder: `data/`**
-- `raw/` — raw NCBI downloads *(ignored by Git)*  
-- `longest/` — longest isoform FASTAs *(ignored by Git)*  
-- `combined/` — merged multi-species dataset *(ignored by Git)*  
-- `alignment/` — alignment files *(ignored by Git)*  
-- `tree/` — final tree outputs *(tracked)*  
+   **macOS (Homebrew):**
+   ```bash
+   brew install mafft fasttree iqtree
+   ```
 
----
+   **Ubuntu / Debian:**
+   ```bash
+   sudo apt-get install mafft fasttree iqtree
+   ```
 
-## 🦗 Species Included
+   **Windows:**
+   - Install MAFFT  
+   - Install FastTree  
+   - Install IQ-TREE  
+   - Note installation paths
 
-**Locusts (Schistocerca spp.)**  
-- *Schistocerca gregaria*  
-- *Schistocerca americana*  
-- *Schistocerca piceifrons*
+3. **Set tool paths in `config.R`**
 
-**Cricket**  
-- *Anabrus simplex* (Mormon cricket)
+   Open `config.R` and set:
 
-**Mosquitoes**  
-- *Anopheles gambiae*  
-- *Aedes aegypti*  
-- *Culex quinquefasciatus*
+   ```r
+   MAFFT_PATH    <- "/path/to/mafft"
+   FASTTREE_PATH <- "/path/to/FastTree"
+   IQTREE_PATH   <- "/path/to/iqtree2"
+   ```
 
----
+4. **Run the full pipeline in R**
 
-## 📦 Dependencies
+   ```r
+   source("run_pipeline.R")
+   ```
 
-R packages:
-- rentrez  
-- seqinr  
-- dplyr  
-- stringr  
-- ape  
-- ggtree  
-- ggplot2  
-- readr  
-
-External tools:
-- **MAFFT** — alignment  
-- **FastTree / IQ-TREE** — phylogenetics  
+5. Check the outputs in:
+   - `data/combined/`
+   - `data/alignment/`
+   - `data/tree/`
+   - any summary tables / plots in `exports/` (if used)
 
 ---
 
-## 🚀 Quickstart
+## 🧬 Species Included
 
-**1. Clone the repository**
-git clone https://github.com/Taylortxtt/AChE_Insect_Transcriptome.git
+- **Locusts:** *Schistocerca gregaria*, *S. cancellata*, *S. piceifrons*  
+- **Cricket:** *Anabrus simplex*  
+- **Mosquitoes:** *Aedes aegypti*, *Anopheles gambiae*, *Culex quinquefasciatus*
 
-**2. Open the project**
-- Open `AChE_Project.Rproj` in RStudio
-
-**3. Run the pipeline**
-Run scripts **in numerical order**:
-
-1 → 2 → 3 → 4 → 5 → 6
-
-Each script outputs files into the corresponding `data/` subfolder.
-
-**4. Add new species**
-- Drop FASTA files into `data/raw/`  
-- Re-run the pipeline starting at script 02 or 03
+These species span high-copy and low-copy AChE lineages, allowing comparisons involving gene family expansion and potential insecticide resistance.
 
 ---
 
-## 👩‍🔬 Author
+## 🗂 Project Structure
 
-**Taylor M. Johnson**  
-Department of Biochemistry  
-Mississippi State University  
+```text
+AChE_Insect_Transcriptome/
+│
+├── AChE_Project.Rproj
+├── config.R                       # MAFFT, FastTree, IQ-TREE executable paths
+├── run_pipeline.R                 # One-click full pipeline
+│
+├── scripts/
+│   ├── 01_download_AChE_sequences.R
+│   ├── 02_extract_longest_isoforms.R      # longest transcript per *gene*
+│   ├── 03_merge_longest_fastas.R
+│   ├── 04_run_alignment.R
+│   ├── 05_build_tree_fasttree.R
+│   ├── 05b_build_tree_iqtree.R           # optional IQ-TREE workflow
+│   ├── 06_plot_tree.R
+│   ├── 06b_plot_tree_iqtree.R            # optional IQ-TREE plot
+│   ├── 07_summarize_copy_number.R        # AChE gene counts per species
+│   ├── 08_screen_mutations.R             # mutation presence/absence
+│
+├── data/
+│   ├── raw/            # Raw FASTAs from NCBI
+│   ├── longest/        # Per-species longest-per-gene FASTAs
+│   ├── combined/       # Combined FASTAs + metadata CSV
+│   ├── alignment/      # MAFFT alignment output
+│   └── tree/           # FastTree & IQ-TREE files + PNG plots
+│
+└── exports/            # Optional: figures, tables, reports
+```
 
 ---
 
-## 📄 License
+## 🔧 Configuration (`config.R`)
 
-MIT License — see the `LICENSE` file.
+This file stores the **absolute paths** to the external tools.  
+You edit this file **once**, and all scripts use these paths automatically.
 
-## 📣 Citation
+```r
+# config.R
+MAFFT_PATH    <- "/path/to/mafft"
+FASTTREE_PATH <- "/path/to/FastTree"
+IQTREE_PATH   <- "/path/to/iqtree2"
+```
 
-Please cite using the included `CITATION.cff` file.
+### Example – macOS (Apple Silicon, Homebrew)
+
+```r
+MAFFT_PATH    <- "/opt/homebrew/bin/mafft"
+FASTTREE_PATH <- "/opt/homebrew/bin/FastTree"
+IQTREE_PATH   <- "/opt/homebrew/bin/iqtree2"
+```
+
+### Example – Windows
+
+```r
+MAFFT_PATH    <- "C:/Program Files/mafft/mafft.bat"
+FASTTREE_PATH <- "C:/Program Files/FastTree/FastTree.exe"
+IQTREE_PATH   <- "C:/Program Files/iqtree2/iqtree2.exe"
+```
+
+If a path is wrong, the corresponding script will stop with a clear error message telling you what to fix.
 
 ---
+
+## 🔁 Pipeline Overview
+
+### One-click run
+
+Once `config.R` is set up:
+
+```r
+source("run_pipeline.R")
+```
+
+By default, `run_pipeline.R` calls, in order:
+
+1. `01_download_AChE_sequences.R` – download raw AChE sequences from NCBI  
+2. `02_extract_longest_isoforms.R` – keep the **longest transcript per gene**  
+3. `03_merge_longest_fastas.R` – merge all species into one FASTA + metadata CSV  
+4. `04_run_alignment.R` – align with MAFFT  
+5. `05_build_tree_fasttree.R` – FastTree ML tree  
+6. `05b_build_tree_iqtree.R` – IQ-TREE ML + support values  
+7. `06_plot_tree.R` – plot the FastTree tree  
+8. `06b_plot_tree_iqtree.R` – plot the IQ-TREE tree  
+9. `07_summarize_copy_number.R` – AChE copy numbers per species  
+10. `08_screen_mutations.R` – mutation presence/absence table  
+
+You can comment out any `run_script()` line inside `run_pipeline.R` if you want to skip a step.
+
+---
+
+## 🔀 Pipeline Diagram
+
+```text
+         ┌────────────────────────────┐
+         │ 01_download_AChE_sequences │
+         └─────────────┬──────────────┘
+                       ↓
+         ┌────────────────────────────┐
+         │ 02_extract_longest_isoforms│  (longest per gene)
+         └─────────────┬──────────────┘
+                       ↓
+         ┌────────────────────────────┐
+         │ 03_merge_longest_fastas    │  (multi-species FASTA + metadata)
+         └─────────────┬──────────────┘
+                       ↓
+         ┌────────────────────────────┐
+         │ 04_run_alignment (MAFFT)   │
+         └─────────────┬──────────────┘
+                       ↓
+        ┌──────────────┼───────────────┐
+        ↓                              ↓
+┌─────────────────────┐       ┌─────────────────────┐
+│05_build_tree_fasttree│      │05b_build_tree_iqtree│
+└─────────────┬────────┘       └─────────────┬──────┘
+              ↓                              ↓
+  ┌────────────────────┐           ┌────────────────────────┐
+  │06_plot_tree        │           │06b_plot_tree_iqtree    │
+  └─────────────┬──────┘           └─────────────┬──────────┘
+                ↓                              ↓
+       ┌───────────────────┐        ┌────────────────────────┐
+       │07_summarize_copy_ │        │08_screen_mutations     │
+       │   number          │        │ (resistance mutations) │
+       └───────────────────┘        └────────────────────────┘
+```
+
+---
+
+## 📂 Key Outputs
+
+### Combined FASTA & Metadata
+
+```text
+data/combined/ache_longest_by_gene_all_species.fasta
+data/combined/ache_longest_by_gene_metadata.csv
+```
+
+### Alignment
+
+```text
+data/alignment/ache_longest_by_gene_aligned.fasta
+```
+
+### FastTree Outputs
+
+```text
+data/tree/ache_longest_by_gene_fasttree.nwk
+data/tree/ache_longest_by_gene_tree.png
+```
+
+### IQ-TREE Outputs
+
+```text
+data/tree/ache_longest_by_gene_iqtree.treefile
+data/tree/ache_longest_by_gene_iqtree.log
+data/tree/ache_longest_by_gene_iqtree.iqtree
+data/tree/ache_longest_by_gene_iqtree_plot.png
+# plus IQ-TREE support / model files
+```
+
+### Summaries
+
+- Copy number table + plots (from `07_summarize_copy_number.R`)  
+- Mutation presence/absence table (from `08_screen_mutations.R`)
+
+---
+
+## 🧪 Methods Summary
+
+### Data Download
+
+NCBI nuccore is queried via `{rentrez}` using:
+
+- Organism filters (genus + species names)
+- AChE-related keywords (acetylcholinesterase, ache, ace)
+- mRNA/CDS-focused search terms
+
+Raw FASTAs are written to `data/raw/`.
+
+### Longest-Per-Gene Extraction
+
+Raw sequences are parsed, gene IDs are inferred from FASTA headers using:
+
+- `gene=...` annotations when present  
+- `LOC...` identifiers  
+- Accession-root fallback (e.g., `XM_123456789`)
+
+For each gene, the **longest isoform** is retained. Outputs go to `data/longest/`.
+
+### Multi-Species Merging
+
+Species-specific FASTAs are merged into:
+
+- `data/combined/ache_longest_by_gene_all_species.fasta`  
+- `data/combined/ache_longest_by_gene_metadata.csv`
+
+Headers are standardized as:
+
+```text
+shortname|original_header
+```
+
+making it easy to link back to species and original records.
+
+### Alignment (MAFFT)
+
+The combined FASTA is aligned with MAFFT using:
+
+```text
+--auto
+```
+
+The resulting alignment is saved in `data/alignment/`.
+
+### Tree Inference
+
+Two tree builders are supported:
+
+- **FastTree**: approximate ML tree with GTR + Gamma  
+- **IQ-TREE**: model-finding (`-m MFP`), ultrafast bootstrap (`-bb 1000`), and SH-aLRT (`-alrt 1000`)
+
+Trees are output to `data/tree/` in Newick format, plus PNG visualizations generated by `06_*` scripts.
+
+### Mutation Screening
+
+`08_screen_mutations.R` scans aligned AChE sequences for a curated set of resistance-associated mutations reported in the literature.  
+Output is a presence/absence matrix that can be used for:
+
+- Heatmaps  
+- Annotation layers on phylogenies  
+- Simple summary tables
+
+---
+
+## 📜 License & Citation
+
+- **License:** See `LICENSE` file in this repository.  
+- **Citation:** See `CITATION.cff` for citation metadata.
+
+If you use or adapt this pipeline, please cite this repository and acknowledge **Taylor Johnson**.
+
+---
+
+## 📬 Contact
+
+Maintained by **Taylor Johnson**.  
+For questions, suggestions, or collaboration, feel free to open an issue or pull request.

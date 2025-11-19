@@ -3,45 +3,73 @@
 #
 # Goal
 # ----
-# For each species' raw FASTA in data/raw/:
-#   1) Write all (filtered) raw sequences into a single
-#      combined FASTA with standardized headers.
-#   2) For each gene type ("AChE1", "AChE2", or "other"),
-#      keep only the longest sequence per species and save
-#      it to data/longest/.
+# For each species, take all raw AChE(-like) sequences in
+# data/raw/ and keep ONLY the longest transcript per *gene*.
 #
-# Header format:
-#   >CommonName_GeneName_GeneID
+# Then, additionally, filter to sequences whose headers
+# or gene_ids clearly look like ace-1 / ace-2 and collapse
+# to at most one longest ace-1 and one longest ace-2 per
+# species (when such labels exist).
 #
-# Example:
-#   >gregaria_AChE_XM_049998832
+# Outputs
+# -------
+# One FASTA per species in data/longest/:
+#   data/longest/<short_name>_longest_by_gene.fasta
 ############################################################
 
-### 0. Helper: read a FASTA file into a data.frame ---------------------------
+### 0. Packages --------------------------------------------------------------
 
-# Base-R parser: returns one row per sequence with
-# columns: header, seq
-read_fasta_to_df <- function(path) {
-  lines      <- readLines(path)
-  header_idx <- which(startsWith(lines, ">"))
-  
-  if (length(header_idx) == 0) {
-    stop("No FASTA headers ('>') found in file: ", path)
+# base R only
+
+### 1. Project folders -------------------------------------------------------
+
+raw_dir     <- file.path("data", "raw")
+longest_dir <- file.path("data", "longest")
+
+if (!dir.exists(raw_dir)) {
+  stop("Raw directory 'data/raw' does not exist. ",
+       "Run 01_download_AChE_sequences.R first.")
+}
+
+if (!dir.exists(longest_dir)) {
+  dir.create(longest_dir, recursive = TRUE)
+}
+
+cat("Raw FASTAs directory:     ", normalizePath(raw_dir), "\n")
+cat("Longest-isoform directory:", normalizePath(longest_dir), "\n\n")
+
+### 2. Species list (must match script 01) -----------------------------------
+
+species_list <- list(
+  list(short_name = "gregaria",   organism_term = "Schistocerca gregaria"),
+  list(short_name = "cancellata", organism_term = "Schistocerca cancellata"),
+  list(short_name = "piceifrons", organism_term = "Schistocerca piceifrons"),
+  list(short_name = "anabrus",    organism_term = "Anabrus simplex"),
+  list(short_name = "anopheles",  organism_term = "Anopheles gambiae"),
+  list(short_name = "aedes",      organism_term = "Aedes aegypti"),
+  list(short_name = "culex",      organism_term = "Culex quinquefasciatus")
+)
+
+### 3. Helper: parse FASTA file ----------------------------------------------
+
+read_fasta <- function(path) {
+  lines <- readLines(path)
+  is_header <- startsWith(lines, ">")
+  if (!any(is_header)) {
+    stop("No FASTA headers (>) detected in file: ", path)
   }
   
-  # Add an artificial "end" index so each header knows where it stops
+  header_idx     <- which(is_header)
   header_idx_end <- c(header_idx[-1] - 1, length(lines))
   
   headers <- character(length(header_idx))
   seqs    <- character(length(header_idx))
   
   for (i in seq_along(header_idx)) {
-    h_start <- header_idx[i]
-    h_end   <- header_idx_end[i]
-    
-    headers[i] <- lines[h_start]
-    seq_lines  <- lines[(h_start + 1):h_end]
-    seqs[i]    <- paste(seq_lines, collapse = "")
+    h <- lines[header_idx[i]]
+    s <- lines[(header_idx[i] + 1):header_idx_end[i]]
+    headers[i] <- sub("^>", "", h)
+    seqs[i]    <- paste0(s, collapse = "")
   }
   
   data.frame(
@@ -51,173 +79,170 @@ read_fasta_to_df <- function(path) {
   )
 }
 
-### 1. Classify gene type from header ---------------------------------------
+### 4. Helper: infer gene ID from a FASTA header -----------------------------
 
-# Very simple pattern-based classifier:
-#   ace-1 / AChE1 / "acetylcholinesterase 1" → "AChE1"
-#   ace-2 / AChE2 / "acetylcholinesterase 2" → "AChE2"
-#   everything else                          → "other"
-classify_gene_type <- function(header) {
-  h <- tolower(header)
-  
-  if (grepl("ace-1|ache1|acetylcholinesterase 1", h)) {
-    return("AChE1")
+get_gene_id_from_header <- function(header) {
+  # 1) gene= pattern
+  gene_match <- regexpr("gene=([^ ]+)", header)
+  if (gene_match != -1) {
+    gene <- regmatches(header, gene_match)
+    gene <- sub("^gene=", "", gene)
+    return(gene)
   }
   
-  if (grepl("ace-2|ache2|acetylcholinesterase 2", h)) {
-    return("AChE2")
+  # 2) LOC-style IDs
+  loc_match <- regexpr("LOC[0-9]+", header)
+  if (loc_match != -1) {
+    loc_id <- regmatches(header, loc_match)
+    return(loc_id)
   }
   
-  # If we can't clearly tell 1 vs 2, call it "other"
-  "other"
+  # 3) Fallback: accession without version
+  first_token    <- strsplit(header, " ")[[1]][1]
+  accession_root <- sub("\\.[0-9]+$", "", first_token)
+  return(accession_root)
 }
 
-### 1B. Rename header to CommonName_GeneName_GeneID -------------------------
+### 5. Helper: choose longest transcript per gene ----------------------------
 
-# CommonName = species_short (e.g. "gregaria")
-# GeneName   = "AChE1", "AChE2", or generic "AChE"
-# GeneID     = accession like XM_049998832 (no version suffix)
-rename_header <- function(header, species_name, gene_type) {
-  # Strip leading ">"
-  id_raw <- sub("^>", "", header)
-  
-  # gene_id = first token before a space or dot
-  #  e.g. XM_049998832 from "XM_049998832.1 something something"
-  gene_id <- sub("^([^ .]+).*", "\\1", id_raw)
-  
-  # Collapse gene_type for labeling
-  gene_label <- ifelse(gene_type %in% c("AChE1", "AChE2"),
-                       gene_type,
-                       "AChE")
-  
-  paste0(">", species_name, "_", gene_label, "_", gene_id)
-}
-
-### 2. Directories -----------------------------------------------------------
-
-raw_dir      <- file.path("data", "raw")
-longest_dir  <- file.path("data", "longest")
-combined_dir <- file.path("data", "combined")
-
-if (!dir.exists(longest_dir)) {
-  dir.create(longest_dir, recursive = TRUE)
-}
-if (!dir.exists(combined_dir)) {
-  dir.create(combined_dir, recursive = TRUE)
-}
-
-cat("Raw directory:      ", normalizePath(raw_dir),      "\n")
-cat("Longest directory:  ", normalizePath(longest_dir),  "\n")
-cat("Combined directory: ", normalizePath(combined_dir), "\n")
-
-# Combined RAW FASTA (all species together, renamed headers)
-combined_raw_path <- file.path(combined_dir, "AChE_raw_all_species.fasta")
-combined_con      <- file(combined_raw_path, open = "w")
-
-### 3. Species short names (match script 01) ---------------------------------
-
-species_short <- c(
-  "gregaria",
-  "cancellata",
-  "piceifrons",
-  "anabrus",
-  "anopheles",
-  "aedes",
-  "culex"
-)
-
-### 4. Process each species --------------------------------------------------
-
-for (sp in species_short) {
-  cat("-------------------------------------------------------------\n")
-  cat("Processing species:", sp, "\n")
-  
-  raw_path <- file.path(raw_dir, paste0(sp, "_raw.fasta"))
-  
-  if (!file.exists(raw_path)) {
-    warning("RAW FASTA not found for ", sp, " at ", raw_path)
-    next
-  }
-  
-  fasta_df <- read_fasta_to_df(raw_path)
-  cat("  Sequences read:", nrow(fasta_df), "\n")
-  
-  # Special case: drop the partial Culex record JX292118.1
-  if (sp == "culex") {
-    before   <- nrow(fasta_df)
-    fasta_df <- fasta_df[!grepl("JX292118.1", fasta_df$header), ]
-    after    <- nrow(fasta_df)
-    
-    cat("  Removed partial Culex sequence JX292118.1 (",
-        before - after, " record(s) dropped)\n", sep = "")
-  }
-  
-  # If nothing left after filtering, skip this species
-  if (nrow(fasta_df) == 0) {
-    warning("No sequences left for species ", sp, " after filtering.")
-    next
-  }
-  
-  # Annotate sequences
-  fasta_df$length    <- nchar(fasta_df$seq)
-  fasta_df$gene_type <- vapply(fasta_df$header, classify_gene_type, character(1))
-  
-  ### 4A. Add all (renamed) raw sequences to the combined FASTA -------------
-  
-  raw_headers_renamed <- vapply(
-    seq_len(nrow(fasta_df)),
-    function(i) {
-      rename_header(
-        header       = fasta_df$header[i],
-        species_name = sp,
-        gene_type    = fasta_df$gene_type[i]
-      )
-    },
-    character(1)
+select_longest_per_gene <- function(fasta_df) {
+  fasta_df$gene_id <- vapply(
+    fasta_df$header,
+    get_gene_id_from_header,
+    FUN.VALUE = character(1)
   )
+  fasta_df$seq_len <- nchar(fasta_df$seq)
   
+  o <- order(fasta_df$gene_id, -fasta_df$seq_len)
+  fasta_df <- fasta_df[o, ]
+  keep_idx <- !duplicated(fasta_df$gene_id)
+  
+  fasta_df[keep_idx, c("header", "seq", "gene_id", "seq_len")]
+}
+
+### 6. Helper: write FASTA back to disk --------------------------------------
+
+write_fasta <- function(fasta_df, path) {
+  lines <- character(2 * nrow(fasta_df))
+  j <- 1
   for (i in seq_len(nrow(fasta_df))) {
-    writeLines(raw_headers_renamed[i], combined_con)
-    writeLines(fasta_df$seq[i],        combined_con)
+    lines[j]   <- paste0(">", fasta_df$header[i])
+    lines[j+1] <- fasta_df$seq[i]
+    j <- j + 2
   }
-  
-  ### 4B. For each gene_type, keep the longest sequence ----------------------
-  
-  # Split by gene_type, then take the row with the max length in each group.
-  longest_list <- lapply(
-    split(fasta_df, fasta_df$gene_type),
-    function(df) df[which.max(df$length), , drop = FALSE]
-  )
-  
-  longest_df <- do.call(rbind, longest_list)
-  
-  cat("  Gene types found:",
-      paste(unique(longest_df$gene_type), collapse = ", "), "\n")
-  cat("  Sequences kept:", nrow(longest_df), "\n")
-  
-  ### 4C. Write per-species 'longest' FASTA with renamed headers -------------
-  
-  out_path <- file.path(longest_dir, paste0(sp, "_longest.fasta"))
-  con      <- file(out_path, open = "w")
-  
-  for (i in seq_len(nrow(longest_df))) {
-    new_header <- rename_header(
-      header       = longest_df$header[i],
-      species_name = sp,
-      gene_type    = longest_df$gene_type[i]
-    )
-    
-    writeLines(new_header,        con)
-    writeLines(longest_df$seq[i], con)
-  }
-  
-  close(con)
-  cat("  Saved longest isoforms to:", out_path, "\n")
+  writeLines(lines, con = path)
 }
 
-### 5. Close combined RAW FASTA and wrap up ---------------------------------
+### 7. Patterns: ace-1 / ace-2 detection ------------------------------------
 
-close(combined_con)
-cat("Combined RAW FASTA saved to:", combined_raw_path, "\n")
-cat("-------------------------------------------------------------\n")
-cat("Done! Check data/longest/ for per-species longest-isoform FASTA files.\n")
+# Broad match for any ace-1 / ace-2 mention
+ace12_pattern <- "(ace[-_ ]?1|ace1|achE1|AChE1|acetylcholinesterase[- ]?1|
+                   ace[-_ ]?2|ace2|achE2|AChE2|acetylcholinesterase[- ]?2)"
+
+is_ace12_like <- function(header, gene_id) {
+  h_match <- grepl(ace12_pattern, header,  ignore.case = TRUE)
+  g_match <- grepl(ace12_pattern, gene_id, ignore.case = TRUE)
+  h_match | g_match
+}
+
+# Finer classification into ace1 vs ace2
+ace1_pattern_type <- "(ace[-_ ]?1|ace1|achE1|AChE1|acetylcholinesterase[- ]?1)"
+ace2_pattern_type <- "(ace[-_ ]?2|ace2|achE2|AChE2|acetylcholinesterase[- ]?2)"
+
+classify_ace_type <- function(header, gene_id) {
+  is_ace1 <- grepl(ace1_pattern_type, header,  ignore.case = TRUE) |
+    grepl(ace1_pattern_type, gene_id, ignore.case = TRUE)
+  is_ace2 <- grepl(ace2_pattern_type, header,  ignore.case = TRUE) |
+    grepl(ace2_pattern_type, gene_id, ignore.case = TRUE)
+  
+  if (is_ace1) return("ace1")
+  if (is_ace2) return("ace2")
+  return("unknown")
+}
+
+### 8. Main loop over species -------------------------------------------------
+
+cat("Selecting longest transcript per gene (ace-1 / ace-2 only)...\n\n")
+
+for (sp in species_list) {
+  short_name <- sp$short_name
+  
+  in_file  <- file.path(raw_dir,     paste0(short_name, "_raw.fasta"))
+  out_file <- file.path(longest_dir, paste0(short_name, "_longest_by_gene.fasta"))
+  
+  cat("--------------------------------------------------\n")
+  cat("Species:", short_name, "\n")
+  cat("Input FASTA: ", in_file,  "\n")
+  cat("Output FASTA:", out_file, "\n")
+  
+  if (!file.exists(in_file)) {
+    warning("Raw FASTA not found for ", short_name,
+            ". Run 01_download_AChE_sequences.R first.")
+    next
+  }
+  
+  fasta_df <- read_fasta(in_file)
+  cat("  Raw sequences:", nrow(fasta_df), "\n")
+  
+  # Longest per gene
+  longest_df <- select_longest_per_gene(fasta_df)
+  cat("  Unique genes before filters:", nrow(longest_df), "\n")
+  
+  # Length sanity filter (remove huge scaffolds)
+  max_len    <- 6000
+  before_len <- nrow(longest_df)
+  longest_df <- longest_df[longest_df$seq_len <= max_len, ]
+  after_len  <- nrow(longest_df)
+  cat("  Filtered out", before_len - after_len,
+      "overly large sequences (> ", max_len, " bp).\n", sep = "")
+  
+  # ace-1 / ace-2-like filter
+  ace_flag <- is_ace12_like(longest_df$header, longest_df$gene_id)
+  n_ace    <- sum(ace_flag)
+  
+  if (n_ace > 0) {
+    cat("  Initially keeping", n_ace,
+        "genes whose headers look like ace-1 / ace-2.\n")
+    longest_df <- longest_df[ace_flag, ]
+    
+    # Classify into ace1 / ace2 / unknown
+    ace_type <- vapply(
+      seq_len(nrow(longest_df)),
+      function(i) classify_ace_type(longest_df$header[i], longest_df$gene_id[i]),
+      FUN.VALUE = character(1)
+    )
+    longest_df$ace_type <- ace_type
+    
+    # Collapse to at most one ace1 and one ace2 per species
+    has_typed <- ace_type %in% c("ace1", "ace2")
+    if (any(has_typed)) {
+      keep_idx <- rep(FALSE, nrow(longest_df))
+      for (t in c("ace1", "ace2")) {
+        idx <- which(longest_df$ace_type == t)
+        if (length(idx) > 0) {
+          # keep the longest sequence within this type
+          best_idx <- idx[which.max(longest_df$seq_len[idx])]
+          keep_idx[best_idx] <- TRUE
+        }
+      }
+      longest_df <- longest_df[keep_idx, ]
+      cat("  After collapsing to one per ace-1 / ace-2 type:",
+          nrow(longest_df), "genes.\n")
+    } else {
+      cat("  NOTE: ace-1/ace-2-like pattern matched, but unable to",
+          "classify into ace1/ace2 types; keeping all ace-like genes.\n")
+    }
+    
+  } else {
+    cat("  WARNING: No clear ace-1 / ace-2-like headers found for this species.\n")
+    cat("           Keeping ALL genes after length filter instead.\n")
+  }
+  
+  cat("  Genes kept for downstream analysis:", nrow(longest_df), "\n")
+  
+  write_fasta(longest_df, out_file)
+  cat("  Saved longest-per-gene FASTA.\n\n")
+}
+
+cat("--------------------------------------------------\n")
+cat("Done! Check data/longest/ for *_longest_by_gene.fasta files.\n")

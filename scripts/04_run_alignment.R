@@ -3,80 +3,101 @@
 #
 # Goal
 # ----
-# Run MAFFT on the combined longest-isoform FASTA and
-# save the multiple sequence alignment to:
+# Align the multi-species AChE FASTA using MAFFT.
 #
-#   data/alignment/AChE_alignment_mafft.fasta
+# Input
+# -----
+#  Preferred (if present):
+#   data/combined/ache_longest_by_gene_ace12_blast_only.fasta
 #
-# This script assumes:
-#   * You are running from the project root (AChE_Project).
-#   * MAFFT is installed and either:
-#       - available on your system PATH as "mafft", or
-#       - you edit mafft_path below to point to mafft/mafft.bat.
+#  Otherwise:
+#   data/combined/ache_longest_by_gene_all_species.fasta
+#
+# Output
+# ------
+#   data/alignment/ache_longest_by_gene_aligned.fasta
+#
+# Notes
+# -----
+# * Uses MAFFT_PATH from config.R
+# * Requires MAFFT to be installed and the path correctly
+#   specified in config.R.
 ############################################################
 
-### 1. Paths ---------------------------------------------------------------
+### 0. Load config -----------------------------------------------------------
 
-combined_fasta <- file.path("data", "combined", "AChE_longest_all_species.fasta")
-align_dir      <- file.path("data", "alignment")
+if (!file.exists("config.R")) {
+  stop("config.R not found in project root.\n",
+       "Create config.R with MAFFT_PATH defined.")
+}
+source("config.R")
 
-if (!file.exists(combined_fasta)) {
-  stop(
-    "Combined FASTA not found at: ", combined_fasta, "\n",
-    "Run 03_merge_longest_fastas.R first."
-  )
+if (!exists("MAFFT_PATH") || !nzchar(MAFFT_PATH)) {
+  stop("MAFFT_PATH not defined in config.R")
 }
 
+### 1. Input / output paths --------------------------------------------------
+
+# Prefer BLAST-filtered ace1/ace2 FASTA if it was created
+blast_fasta   <- file.path("data", "combined",
+                           "ache_longest_by_gene_ace12_blast_only.fasta")
+default_fasta <- file.path("data", "combined",
+                           "ache_longest_by_gene_all_species.fasta")
+
+if (file.exists(blast_fasta)) {
+  in_fasta <- blast_fasta
+  cat("Using BLAST-filtered FASTA as input:\n  ",
+      normalizePath(in_fasta), "\n")
+} else {
+  in_fasta <- default_fasta
+  cat("BLAST-filtered FASTA not found.\n",
+      "Using full combined FASTA as input:\n  ",
+      normalizePath(in_fasta), "\n")
+}
+
+align_dir <- file.path("data", "alignment")
 if (!dir.exists(align_dir)) {
   dir.create(align_dir, recursive = TRUE)
 }
 
-aligned_fasta <- file.path(align_dir, "AChE_alignment_mafft.fasta")
+out_fasta <- file.path(align_dir,
+                       "ache_longest_by_gene_aligned.fasta")
 
-cat("Input FASTA:  ", normalizePath(combined_fasta), "\n")
-cat("Output FASTA: ", normalizePath(aligned_fasta),  "\n")
+cat("Output alignment will be written to:\n  ",
+    normalizePath(out_fasta), "\n\n")
 
-### 2. MAFFT executable path -----------------------------------------------
+### 2. Check input exists ----------------------------------------------------
 
-# Option 1 (recommended): assume MAFFT is on PATH as "mafft".
-mafft_path <- "mafft"
-
-# Option 2: hard-code a local MAFFT path (uncomment and edit if needed).
-# mafft_path <- "path/to/mafft.bat"        # Windows example
-# mafft_path <- "/usr/local/bin/mafft"     # macOS / Linux example
-
-mafft_found <- Sys.which(mafft_path)
-
-if (mafft_found == "") {
-  warning(
-    "MAFFT executable not found for '", mafft_path, "'.\n",
-    "Make sure MAFFT is installed and on your system PATH,\n",
-    "or edit mafft_path in 04_run_alignment.R to point to it."
-  )
-} else {
-  cat("Using MAFFT at:", mafft_found, "\n")
+if (!file.exists(in_fasta)) {
+  stop("Input FASTA not found at: ", in_fasta,
+       "\nRun 03_merge_longest_fastas.R (and optionally BLAST) first.")
 }
 
-### 3. Build MAFFT command --------------------------------------------------
+### 3. Run MAFFT (streaming directly to file) --------------------------------
 
-# --auto     : MAFFT chooses a sensible strategy
-# --thread 2 : use 2 CPU threads (edit if needed)
-mafft_args <- c(
+cmd_args <- c(
   "--auto",
-  "--thread", "2",
-  combined_fasta
+  in_fasta
 )
 
 cat("Running MAFFT...\n")
+cat("Command: ", MAFFT_PATH, " ",
+    paste(cmd_args, collapse = " "), "\n\n", sep = "")
 
-### 4. Run MAFFT via system2 -----------------------------------------------
-
-# Capture MAFFT's stdout and write it directly to the alignment file.
-system2(
-  command = mafft_path,
-  args    = mafft_args,
-  stdout  = aligned_fasta,
-  stderr  = ""   # "" = send stderr to the R console
+# Stream MAFFT output directly to the alignment file
+exit_code <- system2(
+  command = MAFFT_PATH,
+  args    = cmd_args,
+  stdout  = out_fasta,
+  stderr  = ""
 )
 
-cat("Done.\nAlignment saved to:\n", normalizePath(aligned_fasta), "\n")
+if (!identical(exit_code, 0L)) {
+  stop("MAFFT finished with a non-zero exit code: ", exit_code)
+}
+
+### 4. Done ------------------------------------------------------------------
+
+cat("Alignment complete.\n")
+cat("Aligned FASTA saved to:\n  ",
+    normalizePath(out_fasta), "\n")
