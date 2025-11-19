@@ -1,99 +1,136 @@
 ############################################################
 # 04_classify_genes_blast.R
 #
-# Uses BLASTN to classify longest isoforms as ace1 / ace2
-# based on a reference database.
+# Uses BLASTN against a reference AChE database to classify
+# each "longest-by-gene" transcript as ace1 / ace2 / other.
 #
-# Output → data/longest_by_gene/
+# Inputs  (from script 03):
+#   data/combined/ache_longest_by_gene_all_species.fasta
+#   data/combined/ache_longest_by_gene_metadata.csv
+#
+# Outputs:
+#   data/combined/ache_longest_by_gene_metadata_blast.csv
+#   data/blast/ache_longest_by_gene_blast6.tsv
 ############################################################
 
+# Load BLAST paths (BLASTN_PATH, BLAST_DB)
+source("config.R")
+
+library(readr)
 library(dplyr)
 library(stringr)
 
-iso_dir  <- file.path("data", "longest_isoforms")
-out_dir  <- file.path("data", "longest_by_gene")
-combined_dir <- file.path("data", "combined")
+## 1. Paths -------------------------------------------------------------
 
-if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+query_fasta <- file.path("data", "combined",
+                         "ache_longest_by_gene_all_species.fasta")
+meta_csv    <- file.path("data", "combined",
+                         "ache_longest_by_gene_metadata.csv")
+blast_dir   <- file.path("data", "blast")
+if (!dir.exists(blast_dir)) dir.create(blast_dir, recursive = TRUE)
 
-BLASTN_PATH <- "/opt/homebrew/bin/blastn"  # adjust if needed
-BLAST_DB    <- "data/blast/ache_ref"       # no file extension
+blast_out_tsv <- file.path(blast_dir, "ache_longest_by_gene_blast6.tsv")
 
-iso_files <- list.files(iso_dir, full.names = TRUE)
+if (!file.exists(query_fasta)) {
+  stop("Combined FASTA not found: ", normalizePath(query_fasta))
+}
+if (!file.exists(meta_csv)) {
+  stop("Metadata CSV not found: ", normalizePath(meta_csv))
+}
 
-# Read combined metadata from script 03
-meta_path <- file.path(combined_dir, "ache_longest_isoforms_metadata.csv")
-meta <- read.csv(meta_path, stringsAsFactors = FALSE)
+cat("Combined FASTA: ", query_fasta, "\n")
+cat("Metadata CSV:   ", meta_csv, "\n")
+cat("BLASTN:         ", BLASTN_PATH, "\n")
+cat("BLAST DB:       ", BLAST_DB, "\n\n")
 
-# ---- RUN BLAST AND CLASSIFY -------------------------------------------------
+## 2. Run BLASTN --------------------------------------------------------
 
-results <- list()
+# NOTE: outfmt fields are passed as ONE string so BLAST parses them correctly.
+blast_args <- c(
+  "-query", query_fasta,
+  "-db",    BLAST_DB,
+  "-outfmt", "6 qseqid sseqid pident length evalue bitscore",
+  "-max_target_seqs", "5",
+  "-out", blast_out_tsv
+)
 
-for (f in iso_files) {
-  sp <- basename(f) |> str_replace("_longest_isoforms.fasta", "")
-  out_blast <- tempfile(fileext = ".txt")
-  
-  cmd <- c(
-    "-query", f,
-    "-db", BLAST_DB,
-    "-outfmt", "6 qseqid sseqid pident length bitscore",
-    "-max_target_seqs", "5"
+cat("Running BLASTN with command:\n ",
+    BLASTN_PATH, paste(blast_args, collapse = " "), "\n\n")
+
+status <- system2(
+  BLASTN_PATH,
+  args = blast_args
+)
+
+if (status != 0) {
+  stop("BLASTN exited with non-zero status code: ", status,
+       "\nCheck that BLASTN_PATH and BLAST_DB in config.R are correct.")
+}
+
+if (!file.exists(blast_out_tsv) || file.size(blast_out_tsv) == 0) {
+  stop("BLAST output file is missing or empty: ",
+       normalizePath(blast_out_tsv))
+}
+
+cat("Raw BLAST table written to:\n  ",
+    normalizePath(blast_out_tsv), "\n\n")
+
+## 3. Read BLAST results ------------------------------------------------
+
+blast_df <- read_tsv(
+  blast_out_tsv,
+  col_names = c("qseqid", "sseqid", "pident", "length", "evalue", "bitscore"),
+  show_col_types = FALSE
+)
+
+if (nrow(blast_df) == 0) {
+  stop("BLAST table exists but has 0 rows: ",
+       normalizePath(blast_out_tsv))
+}
+
+# Best hit per query (highest bitscore, then lowest evalue)
+blast_best <- blast_df %>%
+  arrange(qseqid, desc(bitscore), evalue) %>%
+  group_by(qseqid) %>%
+  slice(1) %>%
+  ungroup()
+
+# Classify ace1 / ace2 / other based on reference ID
+blast_best <- blast_best %>%
+  mutate(
+    ace_type_blast = case_when(
+      str_detect(sseqid, regex("ace1", ignore_case = TRUE)) ~ "ace1",
+      str_detect(sseqid, regex("ace2", ignore_case = TRUE)) ~ "ace2",
+      TRUE ~ "other"
+    )
   )
-  
-  out <- system2(BLASTN_PATH, cmd, stdout = TRUE, stderr = TRUE)
-  
-  if (!length(out)) {
-    cat("BLAST returned no output for", sp, "\n")
-    next
-  }
-  
-  hits <- read.table(text = out, sep = "\t", header = FALSE,
-                     col.names = c("qseqid", "sseqid", "pident", "length", "bitscore"))
-  
-  if (nrow(hits) == 0) {
-    cat("No BLAST hits for", sp, "\n")
-    next
-  }
-  
-  # Choose best hit
-  best <- hits |> arrange(desc(bitscore)) |> slice(1)
-  
-  # Determine gene assignment from reference header
-  assigned <- ifelse(str_detect(best$sseqid, "ace1"), "ace1", "ace2")
-  
-  results[[sp]] <- assigned
-}
 
-# ---- Write final BLAST-classified FASTA -------------------------------------
+## 4. Join with metadata ------------------------------------------------
 
-combined_fasta <- file.path(combined_dir, "ache_longest_isoforms_all_species.fasta")
-df <- readLines(combined_fasta)
+meta_df <- read_csv(meta_csv, show_col_types = FALSE)
 
-# Simple FASTA reader
-idx <- grep("^>", df)
-starts <- c(idx, length(df)+1)
-parts <- data.frame(header=character(), seq=character(), stringsAsFactors=FALSE)
+# meta_df$qseqid comes from script 03; should match BLAST qseqid
+meta_joined <- meta_df %>%
+  left_join(
+    blast_best %>%
+      select(qseqid, sseqid, pident, length, evalue, bitscore, ace_type_blast),
+    by = "qseqid"
+  )
 
-for (i in seq_along(idx)) {
-  h <- df[idx[i]]
-  s <- paste(df[(idx[i]+1):(starts[i+1]-1)], collapse="")
-  parts[nrow(parts)+1,] <- c(h, s)
-}
+out_meta_blast <- file.path("data", "combined",
+                            "ache_longest_by_gene_metadata_blast.csv")
+write_csv(meta_joined, out_meta_blast)
 
-final <- data.frame()
-for (sp in names(results)) {
-  gene <- results[[sp]]
-  keep <- parts[str_detect(parts$header, sp) & str_detect(parts$header, gene), ]
-  final <- rbind(final, keep)
-}
+cat("BLAST-annotated metadata written to:\n  ",
+    normalizePath(out_meta_blast), "\n\n")
 
-out_fasta <- file.path(out_dir, "ache_longest_by_gene_blast_classified.fasta")
-con <- file(out_fasta, "w")
-for (i in seq_len(nrow(final))) {
-  writeLines(final$header[i], con)
-  writeLines(final$seq[i], con)
-}
-close(con)
+## 5. Simple summary ----------------------------------------------------
 
-cat("BLAST-classified longest-by-gene FASTA saved to:\n  ", out_fasta, "\n")
-cat("Done.\n")
+summary_tab <- meta_joined %>%
+  group_by(species, ace_type_blast) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  arrange(species, ace_type_blast)
+
+cat("Sequences classified by BLAST (per species):\n")
+print(summary_tab)
+cat("\nDone.\n")
