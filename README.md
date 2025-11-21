@@ -74,13 +74,13 @@ Generates polished tree visualizations.
 
 ## 🦗 Species Included
 
-**Locusts (Schistocerca spp.)**  
+**Locusts**  
 - *Schistocerca gregaria*  
 - *Schistocerca cancellata*  
 - *Schistocerca piceifrons*
 
 **Cricket**  
-- *Anabrus simplex* (Mormon cricket)
+- *Anabrus simplex*
 
 **Mosquitoes**  
 - *Anopheles gambiae*  
