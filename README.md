@@ -76,7 +76,7 @@ Generates polished tree visualizations.
 
 **Locusts (Schistocerca spp.)**  
 - *Schistocerca gregaria*  
-- *Schistocerca americana*  
+- *Schistocerca cancellata*  
 - *Schistocerca piceifrons*
 
 **Cricket**  
